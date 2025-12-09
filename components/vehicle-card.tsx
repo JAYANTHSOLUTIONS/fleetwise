@@ -1,5 +1,8 @@
 "use client"
+import { useState, useEffect } from "react"
 import { Thermometer, Zap, AlertCircle, Waves, Clock } from "lucide-react"
+import { PredictionBadge } from "@/components/prediction-badge"
+import { fetchPrediction } from "@/lib/prediction-service"
 
 interface VehicleCardProps {
   id: string
@@ -13,6 +16,13 @@ interface VehicleCardProps {
   onClick?: () => void
 }
 
+interface PredictionState {
+  risk: "low" | "medium" | "high" | null
+  confidence: number
+  loading: boolean
+  error: boolean
+}
+
 export function VehicleCard({
   id,
   name,
@@ -24,6 +34,52 @@ export function VehicleCard({
   lastMaintenance,
   onClick,
 }: VehicleCardProps) {
+  const [prediction, setPrediction] = useState<PredictionState>({
+    risk: null,
+    confidence: 0,
+    loading: true,
+    error: false,
+  })
+
+  useEffect(() => {
+    const getPrediction = async () => {
+      setPrediction((prev) => ({ ...prev, loading: true, error: false }))
+      try {
+        const result = await fetchPrediction({
+          vehicle_id: id,
+          engine_temp: engineTemp,
+          brake_health: brakeHealth,
+          battery_health: battery,
+          vibration_level: vibration,
+        })
+
+        if (result) {
+          setPrediction({
+            risk: result.predicted_risk,
+            confidence: result.confidence_score,
+            loading: false,
+            error: false,
+          })
+        } else {
+          setPrediction((prev) => ({
+            ...prev,
+            loading: false,
+            error: true,
+          }))
+        }
+      } catch (error) {
+        console.error("[v0] Error fetching prediction:", error)
+        setPrediction((prev) => ({
+          ...prev,
+          loading: false,
+          error: true,
+        }))
+      }
+    }
+
+    getPrediction()
+  }, [id, engineTemp, brakeHealth, battery, vibration])
+
   const statusColors = {
     healthy: "bg-emerald-100 text-emerald-700",
     warning: "bg-amber-100 text-amber-700",
@@ -91,6 +147,16 @@ export function VehicleCard({
             {vibration} mm/s
           </p>
         </div>
+      </div>
+
+      <div className="mb-4 pb-4 border-t pt-4">
+        <p className="text-xs text-gray-600 font-semibold mb-2">Predictive Risk</p>
+        <PredictionBadge
+          risk={prediction.risk || "low"}
+          confidence={prediction.confidence}
+          loading={prediction.loading}
+          error={prediction.error}
+        />
       </div>
 
       <div className="flex items-center gap-2 text-sm text-gray-600 pt-4 border-t">
